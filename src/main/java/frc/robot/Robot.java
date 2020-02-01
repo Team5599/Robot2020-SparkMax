@@ -8,10 +8,17 @@
 package frc.robot;
 
 import com.revrobotics.CANSparkMax;
+import com.revrobotics.ColorSensorV3;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
 
+import edu.wpi.first.networktables.NetworkTable;
+import edu.wpi.first.networktables.NetworkTableEntry;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.I2C;
 import edu.wpi.first.wpilibj.SpeedControllerGroup;
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -37,6 +44,15 @@ public class Robot extends TimedRobot {
 
   XBoxController controller;
 
+  I2C.Port port;
+  ColorSensorV3 colorSensor;
+
+  NetworkTable table;
+  NetworkTableEntry tx, ty, ta;
+  double xOffset, yOffset, targetArea;
+
+  String gameData;
+
   /**
    * This function is run when the robot is first started up and should be used
    * for any initialization code.
@@ -59,6 +75,14 @@ public class Robot extends TimedRobot {
     driveTrain = new DifferentialDrive(leftDrive, rightDrive);
 
     controller = new XBoxController(0);
+
+    port = I2C.Port.kOnboard;
+    colorSensor = new ColorSensorV3(port);
+
+    table = NetworkTableInstance.getDefault().getTable("limelight");
+    tx = table.getEntry("tx");
+    ty = table.getEntry("ty");
+    ta = table.getEntry("ta");
   }
 
   /**
@@ -72,6 +96,13 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void robotPeriodic() {
+    xOffset = tx.getDouble(0.0);
+    yOffset = ty.getDouble(0.0);
+    targetArea = ta.getDouble(0.0);
+
+    gameData = DriverStation.getInstance().getGameSpecificMessage();
+
+    SmartDashboard.putNumber("Proximity", colorSensor.getProximity());
   }
 
   /**
@@ -104,7 +135,14 @@ public class Robot extends TimedRobot {
       break;
     case kDefaultAuto:
     default:
-      // Put default auto code here
+      driveTrain.tankDrive(0.45, 0.45);
+
+      if (colorSensor.getProximity() > 140) {
+        driveTrain.tankDrive(-1, -1);
+        Timer.delay(0.5);
+        driveTrain.tankDrive(-1, 1);
+        Timer.delay(1);
+      }
       break;
     }
   }
@@ -114,7 +152,15 @@ public class Robot extends TimedRobot {
    */
   @Override
   public void teleopPeriodic() {
-    driveTrain.tankDrive(controller.getLeftThumbstickY(), controller.getRightThumbstickY());
+    if (controller.getXButton()) {
+      if (xOffset < -1) {
+        driveTrain.tankDrive(-0.5, 0.5);
+      } else if (xOffset > 9) {
+        driveTrain.tankDrive(0.5, -0.5);
+      }
+    } else {
+      driveTrain.tankDrive(-(controller.getLeftThumbstickY()), -(controller.getRightThumbstickY()));
+    }
   }
 
   /**
